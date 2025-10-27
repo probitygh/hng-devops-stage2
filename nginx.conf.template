@@ -1,0 +1,55 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    # Upstream configuration with proper health checks
+    upstream blue_backend {
+        server app_blue:3000 max_fails=1 fail_timeout=2s;
+    }
+
+    upstream green_backend {
+        server app_green:3000 max_fails=1 fail_timeout=2s;
+    }
+
+    upstream active_backend {
+        server app_blue:3000 max_fails=1 fail_timeout=2s;
+        server app_green:3000 max_fails=1 fail_timeout=2s backup;
+    }
+
+    server {
+        listen 80;
+        
+        # Main location - CRITICAL FIX: Handle POST requests properly
+        location / {
+            proxy_pass http://active_backend;
+            
+            # Fast failure detection
+            proxy_connect_timeout 1s;
+            proxy_read_timeout 2s;
+            proxy_send_timeout 2s;
+            
+            # RETRY CONFIGURATION - FIXED
+            proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+            proxy_next_upstream_tries 2;
+            proxy_next_upstream_timeout 4s;
+            
+            # Header preservation
+            proxy_pass_request_headers on;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Important for POST requests
+            proxy_method $request_method;
+            proxy_set_body $request_body;
+        }
+
+        # Health check endpoint
+        location /healthz {
+            proxy_pass http://active_backend/healthz;
+            access_log off;
+        }
+    }
+}

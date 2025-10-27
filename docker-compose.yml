@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:1.24-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
+      - ./entrypoint.sh:/entrypoint.sh
+    environment:
+      - ACTIVE_POOL=${ACTIVE_POOL}
+    command: sh -c "chmod +x /entrypoint.sh && /entrypoint.sh"
+    depends_on:
+      - app_blue
+      - app_green
+
+  app_blue:
+    image: yimikaade/wonderful:devops-stage-two
+    ports:
+      - "8081:3000"
+    environment:
+      - RELEASE_ID=${RELEASE_ID_BLUE}
+      - APP_POOL=blue
+
+  app_green:
+    image: yimikaade/wonderful:devops-stage-two
+    ports:
+      - "8082:3000"
+    environment:
+      - RELEASE_ID=${RELEASE_ID_GREEN}
+      - APP_POOL=green
